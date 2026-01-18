@@ -1,2 +1,184 @@
 # max
 デジタルサイネージ用HTML
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>✨ サイネージMAX ✨</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: 'Inter', sans-serif;
+  background-image: url('https://images.unsplash.com/photo-1503264116251-35a269479413?auto=format&fit=crop&w=1920&q=80');
+  background-size: cover;
+  background-position: center;
+  color: white;
+  overflow: hidden;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  height: 100vh;
+  gap: 12px;
+  padding: 12px;
+  box-sizing: border-box;
+  grid-template-areas:
+    "clock image"
+    "bottom bottom";
+}
+
+.box {
+  background: rgba(30,34,45,0.65);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.clock { grid-area: clock; padding:0; }
+#imageBox { grid-area: image; background: rgba(0,0,0,0.45); }
+#bottom { grid-area: bottom; }
+
+#clock {
+  font-size: 18vw;
+  font-weight: bold;
+  height:100%;
+  display:flex;
+  align-items:center;
+}
+
+#imageBox img {
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:12px;
+}
+
+#date { margin-bottom:10px; color:#eee; }
+
+#weather { font-size:1.6rem; margin-bottom:16px; }
+
+#news {
+  position:relative;
+  width: 100%;
+  height:130px;
+  font-size:2.6rem;
+  font-weight:700;
+  text-align:center;
+}
+
+.news-item {
+  position:absolute;
+  width:100%;
+  opacity:0;
+  transition:opacity 1s ease;
+}
+</style>
+</head>
+
+<body>
+<div class="grid">
+
+  <div class="box clock">
+    <div id="clock"></div>
+  </div>
+
+  <div class="box" id="imageBox">
+    <img src="https://placekitten.com/600/400">
+  </div>
+
+  <div class="box" id="bottom">
+    <div id="date"></div>
+
+    <div id="weather">天気取得中…</div>
+
+    <div id="news"></div>
+  </div>
+
+</div>
+
+<script>
+/* ===== 時計 ===== */
+function updateClock(){
+  const n=new Date();
+  clock.textContent =
+    `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+}
+updateClock();
+setInterval(updateClock,60000);
+
+/* ===== 日付 ===== */
+date.textContent =
+  new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+
+/* ===== ニュース ===== */
+let newsItems = [];
+let newsIndex = 0;
+
+const NEWS_NORMAL = 3600000;
+const NEWS_RETRY  = 120000;
+let newsFetchTimer = null;
+let newsRotateTimer = null;
+
+function startNewsRotate(){
+  clearInterval(newsRotateTimer);
+  newsRotateTimer = setInterval(showNextNews,20000);
+  showNextNews();
+}
+
+function showNextNews(){
+  const container = document.getElementById('news');
+  container.innerHTML = '';
+
+  const div = document.createElement('div');
+  div.className='news-item';
+
+  if(newsItems.length === 0){
+    div.textContent = 'ニュース取得待機中…';
+  }else{
+    div.textContent = newsItems[newsIndex];
+    newsIndex = (newsIndex+1) % newsItems.length;
+  }
+
+  container.appendChild(div);
+  requestAnimationFrame(()=>div.style.opacity=1);
+}
+
+async function fetchNews(){
+  try{
+    const res = await fetch(
+      'https://api.rss2json.com/v1/api.json?rss_url=https://www3.nhk.or.jp/rss/news/cat0.xml'
+    );
+    const data = await res.json();
+    if(!data.items) throw 0;
+
+    newsItems = data.items.slice(0,5).map(i=>i.title);
+    newsIndex = 0;
+    scheduleNewsFetch(NEWS_NORMAL);
+  }catch{
+    scheduleNewsFetch(NEWS_RETRY);
+  }
+}
+
+function scheduleNewsFetch(interval){
+  clearTimeout(newsFetchTimer);
+  newsFetchTimer = setTimeout(fetchNews,interval);
+}
+
+startNewsRotate();
+fetchNews();
+
+/* ===== 天気（前と同じ自動復旧） ===== */
+let weatherTimer=null;
+const WEATHER_NORMAL=3600000;
+const WEATHER_RETRY=120000;
+
+async function fetchWeather(){
+  const apiKey='YOUR_API_KEY_HERE
